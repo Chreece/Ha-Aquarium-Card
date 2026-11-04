@@ -156,3 +156,71 @@ test('child devices inherit aquarium grouping from labelled parent device', () =
   const aquariums = discoverAquariums(hass, { match: 'Aquarium' }, labels);
   assert(aquariums.some((tank) => tank.selections.tds?.id === 'sensor.planted_tds'));
 });
+
+
+const { lightRgb, temperatureCondition, waterCondition, feedingCondition, sceneState } =
+  await import('../dist/ha-aquarium-card.js');
+
+test('temperature cue is cold, good, or hot only against configured limits', () => {
+  const hass=example();
+  const cfg={temperature_min:23,temperature_max:26};
+  const setTemp=(n)=>{
+    hass.states['sensor.planted_water_temperature']=mkState('sensor.planted_water_temperature',String(n),
+      {friendly_name:'Aquarium Water Temperature',device_class:'temperature',unit_of_measurement:'°C'});
+    return discoverAquariums(hass,{aquariums:[{area:'planted'}]},labels)[0];
+  };
+  let t=setTemp(24.7);
+  assert.equal(temperatureCondition(t.selections.temperature,t,cfg).level,'ok');
+  t=setTemp(20.4);
+  assert.equal(temperatureCondition(t.selections.temperature,t,cfg).level,'cold');
+  t=setTemp(28.4);
+  assert.equal(temperatureCondition(t.selections.temperature,t,cfg).level,'hot');
+  assert.equal(temperatureCondition(t.selections.temperature,t,{}).level,'unknown');
+});
+
+test('per-aquarium temperature limits override global settings',()=>{
+  const h=example();
+  const t=discoverAquariums(h,{aquariums:[{area:'planted',temperature_min:25,temperature_max:28}]},labels)[0];
+  assert.equal(temperatureCondition(t.selections.temperature,t,{temperature_min:23,temperature_max:26}).level,'cold');
+  assert.equal(temperatureCondition(t.selections.temperature,{...t,definition:{}},{temperature_min:26,temperature_max:23}).level,'unknown');
+});
+
+test('water clarity cue uses tank-defined TDS bands and alarm priority',()=>{
+  const h=example();
+  const cfg={tds_good_max:200,tds_warn_max:320};
+  const get=()=>discoverAquariums(h,{aquariums:[{area:'planted'}]},labels)[0];
+  assert.equal(waterCondition(get().selections.tds,[],get(),cfg).level,'good');
+  h.states['sensor.planted_tds']=mkState('sensor.planted_tds','275',{unit_of_measurement:'ppm'});
+  assert.equal(waterCondition(get().selections.tds,[],get(),cfg).level,'warning');
+  h.states['sensor.planted_tds']=mkState('sensor.planted_tds','425',{unit_of_measurement:'ppm'});
+  assert.equal(waterCondition(get().selections.tds,[],get(),cfg).level,'bad');
+  assert.equal(waterCondition(get().selections.tds,[],get(),{}).level,'unknown');
+  const w={id:'binary_sensor.planted_high_tds',state:mkState('binary_sensor.planted_high_tds','on',{friendly_name:'High TDS'}),registry:{}};
+  assert.equal(waterCondition(get().selections.tds,[w],get(),cfg).level,'bad');
+});
+
+test('feeding flakes last a finite time and an always-on feeder does not count as feeding',()=>{
+  const h=example();
+  const now=Date.parse('2026-11-04T12:00:00Z');
+  h.states['datetime.fishfeeder_last_feed']=mkState('datetime.fishfeeder_last_feed','2026-11-04T11:59:50Z',
+    {friendly_name:'Aquarium Fishfeeder Last Feed'});
+  const t=discoverAquariums(h,{aquariums:[{area:'planted'}]},labels)[0];
+  assert.equal(feedingCondition(t.entities,t.selections.feeder,t,{feeding_duration:30},now).active,true);
+  assert.equal(feedingCondition(t.entities,t.selections.feeder,t,{feeding_duration:30},now+30000).active,false);
+  const sw={id:'switch.fishfeeder',state:mkState('switch.fishfeeder','on',{friendly_name:'Feeder'}),registry:{}};
+  assert.equal(feedingCondition([sw],sw,t,{},now).active,false);
+});
+
+test('aquarium light illuminates on its RGB color and darkens when off',()=>{
+  const h=example();
+  const get=()=>discoverAquariums(h,{aquariums:[{area:'planted'}]},labels)[0];
+  const light=sceneState(get(),h,{temperature_min:23,temperature_max:26,tds_good_max:220,tds_warn_max:320});
+  assert.equal(light.light.active,true);
+  assert.deepEqual(light.light.color,[10,155,240]);
+  assert.equal(light.quality.level,'good');
+  h.states['light.planted_wled']=mkState('light.planted_wled','off');
+  const dark=sceneState(get(),h,{});
+  assert.equal(dark.light.active,false);
+  assert(dark.light.darkness>0);
+  assert.deepEqual(lightRgb({attributes:{rgb_color:[-4,900,120]}}),[0,255,120]);
+});
