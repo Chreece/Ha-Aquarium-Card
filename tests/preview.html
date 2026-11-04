@@ -1,0 +1,56 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<style>
+  :root { --primary-text-color:#f7fdff; --secondary-text-color:#d8e6eb; --card-background-color:#0b2a3a; --divider-color:#356077; }
+  body { margin: 0; padding: 28px; min-height: 100vh; background: radial-gradient(ellipse at top, #144354 0%, #06141c 90%); color: #fff; font: 14px -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; }
+  .shell { max-width: 850px; margin: auto; }
+  .page-head { display:flex; justify-content:space-between; margin-bottom:18px; align-items:center; }
+  .page-head h1 {font-size:19px; font-weight:600; margin:0; color:#e3f6f8;}
+  .page-head span { color:#81b8c9; font-size:12px; }
+  ha-card {display:block}
+  ha-icon { display:inline-block; font-style:normal; font-size:var(--mdc-icon-size,18px); line-height:1 }
+</style></head><body><div class="shell"><div class="page-head"><h1>My aquariums</h1><span>Home Assistant · dashboard</span></div><ha-aquarium-card id="card"></ha-aquarium-card></div>
+<script>
+  customElements.define('ha-icon', class extends HTMLElement {
+    connectedCallback() { const name=this.getAttribute('icon')||''; this.textContent = ({'mdi:thermometer-water':'🌡','mdi:water-check':'≈','mdi:lightbulb-on-outline':'☀','mdi:fish':'🐠','mdi:waves-arrow-up':'≋','mdi:test-tube':'⚗','mdi:water-percent':'💧','mdi:pump':'↻','mdi:radiator':'♨','mdi:alert-circle-outline':'⚠'})[name]||'•'; }
+  });
+  function state(id, status, attrs){return {entity_id:id,state:status,attributes:attrs||{}};}
+  window.mockHass = {
+    areas:{ main:{area_id:'main',name:'Aquarium'},nano:{area_id:'nano',name:'Nano Aquarium'} },
+    devices:{ main_device:{area_id:'main',labels:['aquarium']},nano_device:{area_id:'nano',labels:['aquarium']}},
+    entities:{
+      'sensor.main_temperature': {device_id:'main_device',labels:['aquarium']},
+      'sensor.main_tds': {device_id:'main_device',labels:['aquarium']},
+      'light.main_wled': {device_id:'main_device',labels:['aquarium']},
+      'datetime.main_feed': {device_id:'main_device',labels:['aquarium']},
+      'binary_sensor.main_water_level': {device_id:'main_device',labels:['aquarium']},
+      'sensor.nano_temperature': {device_id:'nano_device',labels:['aquarium']},
+      'sensor.nano_tds': {device_id:'nano_device',labels:['aquarium']},
+      'light.nano_led': {device_id:'nano_device',labels:['aquarium']},
+      'switch.nano_pump': {device_id:'nano_device',labels:['aquarium']},
+      'binary_sensor.nano_high_tds':{device_id:'nano_device',labels:['aquarium']}
+    },
+    states:{
+      'sensor.main_temperature':state('sensor.main_temperature','24.7',{friendly_name:'Aquarium Water Temperature',device_class:'temperature',unit_of_measurement:'°C'}),
+      'sensor.main_tds':state('sensor.main_tds','198',{friendly_name:'Aquarium TDS',unit_of_measurement:'ppm'}),
+      'light.main_wled':state('light.main_wled','on',{friendly_name:'Aquarium WLED',rgb_color:[35,177,255],effect:'Deep ocean'}),
+      'datetime.main_feed':state('datetime.main_feed',new Date(Date.now()-2*3600*1000).toISOString(),{friendly_name:'Aquarium Fishfeeder Last Feed'}),
+      'binary_sensor.main_water_level':state('binary_sensor.main_water_level','off',{friendly_name:'Aquarium Water Level',device_class:'problem'}),
+      'sensor.nano_temperature':state('sensor.nano_temperature','26.1',{friendly_name:'Nano aquarium temperature',device_class:'temperature',unit_of_measurement:'°C'}),
+      'sensor.nano_tds':state('sensor.nano_tds','325',{friendly_name:'Nano aquarium TDS',unit_of_measurement:'ppm'}),
+      'light.nano_led':state('light.nano_led','off',{friendly_name:'Nano aquarium LED'}),
+      'switch.nano_pump':state('switch.nano_pump','on',{friendly_name:'Nano aquarium filter pump'}),
+      'binary_sensor.nano_high_tds':state('binary_sensor.nano_high_tds','on',{friendly_name:'High TDS',device_class:'problem'})
+    },
+    config:{unit_system:{temperature:'°C'}}, locale:{language:'en'}, connected:true,
+    callWS: async() => [{label_id:'aquarium',name:'Aquarium'}],
+    connection:{subscribeEvents:async()=>()=>{}}
+  };
+</script>
+<script type="module">
+  import '../dist/ha-aquarium-card.js';
+  const card=document.querySelector('#card');
+  card.setConfig({match:'Aquarium', max_metrics:5});
+  card.hass=window.mockHass;
+  window.previewReady=true;
+  card.addEventListener('hass-more-info',e=>{window.lastOpened=e.detail.entityId});
+</script></body></html>
