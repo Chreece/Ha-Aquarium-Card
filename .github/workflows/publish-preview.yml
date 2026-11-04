@@ -5,7 +5,10 @@ on:
     branches: [main]
     paths:
       - "dist/**"
-      - "tests/preview.html"
+      - "src/**"
+      - "scripts/**"
+      - "tests/**"
+      - "package.json"
       - ".github/workflows/publish-preview.yml"
   workflow_dispatch:
 
@@ -29,7 +32,7 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - name: Test the card
+      - name: Build and test the card
         run: |
           npm run check
           npm test
@@ -38,8 +41,9 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install playwright pillow
           python -m playwright install --with-deps chromium
-      - name: Render real scene previews
+      - name: Check layout and render real scene previews
         run: |
+          python tests/layout.py
           python tests/screenshot.py
           python - <<'PY'
           from pathlib import Path
@@ -49,13 +53,13 @@ jobs:
               with Image.open(source) as image:
                   image.convert("RGB").save(Path("docs") / (name + ".webp"), quality=85, method=6)
           PY
-      - name: Commit updated previews
+      - name: Commit tested bundle and updated previews
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add docs/preview.webp docs/mobile.webp
+          git add dist/ha-aquarium-card.js docs/preview.webp docs/mobile.webp
           if ! git diff --cached --quiet; then
-            git commit -m "docs: regenerate living aquarium previews [skip ci]"
+            git commit -m "build: publish tested aquarium bundle and previews [skip ci]"
             git push origin HEAD:main
           fi
       - name: Tag tested version for HACS updates

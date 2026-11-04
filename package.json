@@ -1,12 +1,13 @@
 {
   "name": "ha-aquarium-card",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "Photo-first multi-aquarium card for Home Assistant",
   "type": "module",
   "private": true,
   "scripts": {
     "test": "node --test tests/*.test.mjs",
-    "check": "node --check dist/ha-aquarium-card.js"
+    "check": "npm run build && node --check dist/ha-aquarium-card.js",
+    "build": "node scripts/build.mjs"
   },
   "license": "MIT"
 }
