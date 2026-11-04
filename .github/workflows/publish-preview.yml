@@ -1,0 +1,70 @@
+name: Publish preview and version
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "dist/**"
+      - "tests/preview.html"
+      - ".github/workflows/publish-preview.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: aquarium-preview-main
+  cancel-in-progress: true
+
+jobs:
+  preview:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Test the card
+        run: |
+          npm run check
+          npm test
+      - name: Install screenshot tools
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install playwright pillow
+          python -m playwright install --with-deps chromium
+      - name: Render real scene previews
+        run: |
+          python tests/screenshot.py
+          python - <<'PY'
+          from pathlib import Path
+          from PIL import Image
+          for name in ("preview", "mobile"):
+              source = Path("docs") / (name + ".png")
+              with Image.open(source) as image:
+                  image.convert("RGB").save(Path("docs") / (name + ".webp"), quality=85, method=6)
+          PY
+      - name: Commit updated previews
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add docs/preview.webp docs/mobile.webp
+          if ! git diff --cached --quiet; then
+            git commit -m "docs: regenerate living aquarium previews [skip ci]"
+            git push origin HEAD:main
+          fi
+      - name: Tag tested version for HACS updates
+        run: |
+          VERSION="$(node -p 'require("./package.json").version')"
+          git fetch origin --tags
+          if git rev-parse -q --verify "refs/tags/v${VERSION}" >/dev/null; then
+            echo "v${VERSION} already exists"
+          else
+            git tag -a "v${VERSION}" -m "HA Aquarium Card v${VERSION}"
+            git push origin "v${VERSION}"
+          fi
