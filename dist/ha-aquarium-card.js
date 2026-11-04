@@ -2,7 +2,7 @@
  * HA Aquarium Card — dependency-free Home Assistant dashboard card.
  * Copyright (c) 2026 HA Aquarium Card contributors. MIT licensed.
  */
-const AQUARIUM_CARD_VERSION = "0.1.0";
+const AQUARIUM_CARD_VERSION = "0.2.0";
 const DEFAULT_IMAGE = new URL("./aquarium-default.webp", import.meta.url).href;
 const INVALID_STATES = new Set(["unknown", "unavailable", "none", "null", ""]);
 const CATEGORY_ORDER = ["temperature", "tds", "light", "feeder", "water_level", "ph", "salinity", "pump", "heater"];
@@ -19,62 +19,139 @@ const CATEGORY_INFO = {
   leak: { label: "Leak", icon: "mdi:water-alert", color: "#ff958d" },
 };
 const STYLES = `
-  :host { display: block; color: var(--primary-text-color); }
-  ha-card { background: transparent; border: 0; box-shadow: none; overflow: visible; }
-  .collection { display: grid; gap: 16px; }
-  .tank { position: relative; min-height: 306px; isolation: isolate; overflow: hidden; border-radius: 24px;
-    background: #093044; color: #fff; box-shadow: 0 16px 35px rgba(4, 22, 35, .20);
-    border: 1px solid rgba(130, 205, 222, .26); }
-  .tank-photo { position: absolute; inset: 0; z-index: -2; background-size: cover; background-position: center;
-    background-repeat: no-repeat; background-color: #083046; transform: scale(1.005); }
-  .tank::before { content: ''; position: absolute; inset: 0; z-index: -1; pointer-events: none;
-    background: linear-gradient(180deg, rgba(0, 20, 34, .76) 0%, rgba(2, 25, 42, .13) 36%, rgba(3, 29, 43, .39) 54%, rgba(1, 18, 33, .92) 100%); }
-  .contents { padding: 20px; min-height: 266px; display: flex; flex-direction: column; justify-content: space-between; gap: 22px; }
-  .head { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; }
-  .identity { min-width: 0; }
-  .eyebrow { font-size: 10px; font-weight: 700; letter-spacing: .19em; text-transform: uppercase; color: #9fece6; margin-bottom: 5px; }
-  .title { margin: 0; font-weight: 730; font-size: clamp(21px, 4vw, 28px); line-height: 1.15;
-    overflow-wrap: anywhere; text-shadow: 0 2px 12px rgba(0, 0, 0, .32); }
-  .status-line { display: flex; flex-wrap: wrap; gap: 6px; justify-content: flex-end; max-width: 48%; }
-  .status-pill { display: inline-flex; align-items: center; gap: 6px; font-size: 11px; font-weight: 650;
-    padding: 8px 10px; border: 1px solid rgba(255,255,255,.23); border-radius: 100px;
-    background: rgba(5, 35, 49, .52); backdrop-filter: blur(11px); -webkit-backdrop-filter: blur(11px); }
-  .status-pill .dot { width: 7px; height: 7px; border-radius: 100%; background: #7ce7c9; box-shadow: 0 0 10px #3ce2bd; }
-  .status-pill.offline .dot { background: #aeb6bc; box-shadow: none; }
-  .status-pill.warning { background: rgba(91, 34, 31, .82); color: #fff2e9; border-color: rgba(255, 178, 140, .57); cursor: pointer; }
-  .status-pill.warning ha-icon { --mdc-icon-size: 16px; color: #ffb18c; }
-  .status-pill:focus-visible, button.metric:focus-visible { outline: 2px solid #ecffef; outline-offset: 3px; }
-  .readings { display: grid; grid-template-columns: repeat(auto-fit, minmax(111px, 1fr)); gap: 9px; width: 100%; }
-  button.metric { color: #fff; font: inherit; min-width: 0; min-height: 88px; padding: 12px 12px 11px;
-    background: rgba(7, 38, 53, .72); border: 1px solid rgba(183, 235, 240, .19);
-    border-radius: 16px; text-align: left; cursor: pointer; display: flex; flex-direction: column; gap: 7px;
-    backdrop-filter: blur(13px); -webkit-backdrop-filter: blur(13px); transition: background .16s ease, transform .16s ease; }
-  button.metric:hover { background: rgba(18, 68, 84, .87); transform: translateY(-2px); }
-  .metric-top { display: flex; align-items: center; gap: 7px; min-width: 0; width: 100%; }
-  .metric-top ha-icon { --mdc-icon-size: 18px; flex: 0 0 auto; color: var(--reading-color, #88e5e8); }
-  .metric-label { font-size: 11px; font-weight: 560; opacity: .84; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .metric-value { display: flex; gap: 5px; min-width: 0; max-width: 100%; align-items: baseline;
-    font-size: 21px; line-height: 1.05; font-weight: 720; font-variant-numeric: tabular-nums; white-space: nowrap; }
-  .metric-value .value-text { overflow: hidden; text-overflow: ellipsis; }
-  .metric-value .unit { font-size: 12px; color: #d0e5ed; font-weight: 540; }
-  .metric-detail { margin-top: -3px; font-size: 11px; white-space: nowrap; overflow: hidden;
-    text-overflow: ellipsis; color: #c6e6e5; }
-  .metric.off { --reading-color: #aec7d0 !important; background: rgba(13, 34, 42, .61); }
-  .metric.alert { background: rgba(98, 37, 36, .79); border-color: rgba(255, 169, 133, .67); --reading-color: #ff9b8e !important; }
-  .metric.unavailable { opacity: .65; }
-  .swatch { width: 8px; height: 8px; border-radius: 50%; border: 1px solid rgba(255, 255, 255, .68); flex: 0 0 auto; }
-  .empty { align-self: flex-start; padding: 11px 14px; border-radius: 13px; background: rgba(6, 35, 51, .75);
-    font-size: 12px; line-height: 1.5; max-width: 360px; color: #e4f5f6; }
-  @media (max-width: 520px) {
-    .tank { border-radius: 20px; min-height: 345px; }
-    .contents { padding: 15px; min-height: 315px; gap: 55px; }
-    .title { font-size: 22px; }
-    .readings { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 7px; }
-    button.metric { min-height: 68px; padding: 10px; gap: 5px; }
-    .metric-value { font-size: 18px; }
-    .status-pill { font-size: 10px; padding: 7px 9px; }
+  :host { display:block; color:var(--primary-text-color); }
+  ha-card { display:block; overflow:visible; background:transparent; border:0; box-shadow:none; }
+  .collection { display:grid; gap:16px; }
+  .tank { position:relative; isolation:isolate; overflow:hidden; min-height:358px; border-radius:24px;
+    background:#062a39; color:#f5fffe; border:1px solid rgba(163,231,233,.23);
+    box-shadow:0 12px 34px rgba(2,15,24,.23); --light-rgb:142,204,248; --beam-opacity:0;
+    --photo-brightness:1; --night-opacity:0; --haze-opacity:0; }
+  .photo, .water-haze, .night-shade, .light-beam, .light-surface, .caustics, .scene-vignette,
+  .flake-field { position:absolute; inset:0; pointer-events:none; }
+  .photo { z-index:0; background-size:cover; background-position:center; background-repeat:no-repeat;
+    background-color:#0b3548; filter:brightness(var(--photo-brightness)) saturate(1.09);
+    transform:scale(1.012); transition:filter 1.2s ease; }
+  .water-haze { z-index:1; opacity:var(--haze-opacity); background:
+    radial-gradient(ellipse at 43% 65%,rgba(173,173,126,.76),rgba(143,153,129,.43) 50%,rgba(79,112,107,.20) 100%),
+    radial-gradient(circle at 22% 35%,rgba(232,211,156,.23) 0 1px,transparent 2px);
+    backdrop-filter:blur(2px) saturate(.75); -webkit-backdrop-filter:blur(2px) saturate(.75);
+    transition:opacity 1.1s ease; }
+  .tank.quality-bad .water-haze { backdrop-filter:blur(3.2px) saturate(.55); -webkit-backdrop-filter:blur(3.2px) saturate(.55); }
+  .night-shade { z-index:2; background:linear-gradient(180deg,rgba(0,12,27,.44),rgba(0,11,27,.66));
+    opacity:var(--night-opacity); transition:opacity 1s ease; }
+  .light-beam { z-index:3; inset:-7% 8% 0; opacity:var(--beam-opacity);
+    background:radial-gradient(ellipse 40% 95% at 50% -8%,rgba(var(--light-rgb),.78),rgba(var(--light-rgb),.20) 52%,transparent 100%);
+    mix-blend-mode:screen;
+    transition:opacity 1.2s ease,background 1.1s ease; }
+  .light-surface { z-index:3; inset:0 12% auto; height:72px; opacity:var(--beam-opacity);
+    background:radial-gradient(ellipse at 50% 0%,rgba(var(--light-rgb),.70),transparent 72%);
+    filter:blur(14px); transition:opacity .9s ease; }
+  .caustics { z-index:4; opacity:calc(var(--beam-opacity) * .35); mix-blend-mode:screen;
+    background:repeating-radial-gradient(ellipse at 40% -20%,transparent 0 17px,rgba(var(--light-rgb),.12) 19px 22px,transparent 25px 44px);
+    transform:scale(1.15); animation:caustics 15s ease-in-out infinite alternate; }
+  .scene-vignette { z-index:5; background:linear-gradient(180deg,rgba(0,16,26,.63),transparent 25%,transparent 64%,rgba(0,17,29,.84) 100%),
+    linear-gradient(90deg,rgba(0,14,25,.22),transparent 34%,transparent 70%,rgba(0,14,25,.24)); }
+  .flake-field { z-index:6; overflow:hidden; opacity:0; transition:opacity .6s ease; }
+  .tank.feeding .flake-field { opacity:1; }
+  .flake { position:absolute; top:10%; left:var(--flake-left); width:var(--flake-size); height:calc(var(--flake-size) * .52);
+    border-radius:65% 40% 60% 45%; background:#e9ae67; border:1px solid rgba(255,222,170,.35);
+    box-shadow:0 1px 7px rgba(235,179,99,.6); opacity:0;
+    animation:flake-fall var(--flake-duration) var(--flake-delay) linear infinite; }
+  .scene-ui { position:relative; z-index:7; box-sizing:border-box; min-height:358px; padding:19px;
+    display:flex; flex-direction:column; justify-content:space-between; gap:12px; }
+  .head { display:flex; justify-content:space-between; align-items:start; gap:12px; }
+  .heading { min-width:0; }
+  .eyebrow { font-size:10px; font-weight:700; letter-spacing:.16em; color:#a4dfe1; text-transform:uppercase; margin-bottom:4px; }
+  .title { margin:0; font-size:clamp(20px,3.4vw,28px); font-weight:700; line-height:1.18; overflow-wrap:anywhere;
+    text-shadow:0 2px 14px rgba(0,0,0,.6); }
+  .connectivity { display:flex; gap:5px; align-items:center; font-size:10px; color:#d9f1f0; margin-top:8px;
+    text-shadow:0 1px 9px rgba(0,0,0,.65); }
+  .connectivity-dot { width:6px; height:6px; border-radius:50%; background:#6fdec6; box-shadow:0 0 8px #70ffce; }
+  .connectivity.offline .connectivity-dot { background:#9aa6ae; box-shadow:none; }
+  .alarms { display:flex; flex-direction:column; align-items:flex-end; gap:5px; max-width:58%; }
+  .alarm { color:#ffefe7; background:rgba(91,34,23,.81); border:1px solid rgba(255,185,134,.58);
+    border-radius:12px; padding:7px 9px; font:600 11px inherit; font-size:11px; cursor:pointer; display:flex;
+    align-items:center; gap:6px; text-shadow:0 1px 4px #342322; backdrop-filter:blur(8px); }
+  .alarm ha-icon { --mdc-icon-size:17px; color:#ffbe7f; }
+  .scene-hotspot { -webkit-tap-highlight-color:transparent; position:absolute; color:#ecfcfc; cursor:pointer; appearance:none;
+    font:inherit; background:rgba(4,34,45,.50); backdrop-filter:blur(9px); -webkit-backdrop-filter:blur(9px);
+    border:1px solid rgba(213,247,249,.32); border-radius:18px; display:flex; flex-direction:column;
+    align-items:center; justify-content:center; gap:3px; padding:8px; box-shadow:0 6px 17px rgba(0,12,23,.18);
+    transition:border-color .2s ease,background .2s ease,transform .2s ease; }
+  .scene-hotspot:hover { background:rgba(10,65,76,.72); border-color:rgba(221,255,249,.64); transform:translateY(-2px); }
+  .scene-hotspot:focus-visible, .alarm:focus-visible, .accessory:focus-visible { outline:3px solid #fff; outline-offset:3px; }
+  .scene-hotspot:disabled { cursor:default; }
+  .scene-hotspot.unavailable { opacity:.65; }
+  .scene-hotspot .spot-label { font-size:9px; text-transform:uppercase; letter-spacing:.115em; font-weight:720; line-height:1.1; }
+  .scene-hotspot .spot-condition { font-size:10px; font-weight:630; line-height:1.2; white-space:nowrap; }
+  .light-control { top:13px; left:50%; width:51px; min-height:55px; transform:translateX(-50%);
+    padding:4px; border-radius:25px; background:rgba(1,27,36,.46); }
+  .light-control:hover { transform:translateX(-50%) translateY(1px); }
+  .light-control::before { content:''; position:absolute; bottom:100%; left:50%; height:16px; border-left:2px solid rgba(195,237,233,.5); }
+  .light-control ha-icon { --mdc-icon-size:26px; color:var(--lamp-color,#c8d6da); filter:drop-shadow(0 0 6px var(--lamp-color,#d3eef4)); }
+  .light-control .spot-label { font-size:8px; }
+  .light-control.is-off ha-icon { color:#adbbca; filter:none; }
+  .feeder-control { top:33%; right:5%; width:69px; min-height:72px; }
+  .feeder-control ha-icon { --mdc-icon-size:27px; color:#f4cf92; }
+  .feeder-control.is-feeding { border-color:rgba(250,220,142,.95); background:rgba(108,69,27,.65); box-shadow:0 0 27px rgba(255,189,85,.27); }
+  .temperature-control { top:48%; left:4%; width:73px; min-height:119px; --level-color:#a4c1c7; }
+  .temperature-control.temp-cold { --level-color:#6dc8fd; }
+  .temperature-control.temp-ok { --level-color:#76edb5; }
+  .temperature-control.temp-hot { --level-color:#ff956e; }
+  .temperature-control.temp-unknown { --level-color:#9babb3; }
+  .thermometer { position:relative; width:22px; height:60px; margin:0 0 4px; }
+  .therm-stem { box-sizing:border-box; position:absolute; top:0; left:5px; width:13px; height:49px; border-radius:12px 12px 5px 5px;
+    border:3px solid rgba(229,252,249,.89); background:rgba(3,31,50,.42); overflow:hidden; }
+  .therm-level { position:absolute; bottom:-1px; left:2px; right:2px; height:var(--therm-height,50%); border-radius:7px;
+    background:var(--level-color); box-shadow:0 0 8px var(--level-color); transition:height .9s ease,background .6s ease; }
+  .therm-bulb { position:absolute; bottom:0; left:1px; width:20px; height:20px; border-radius:50%;
+    box-sizing:border-box; border:3px solid rgba(229,252,249,.93); background:var(--level-color);
+    box-shadow:0 0 10px var(--level-color); }
+  .quality-control { top:51%; right:4%; width:79px; min-height:104px; --quality-color:#9bdee3; }
+  .quality-control.quality-good { --quality-color:#67ebd2; }
+  .quality-control.quality-warning { --quality-color:#f2c16d; }
+  .quality-control.quality-bad { --quality-color:#ff9a77; border-color:rgba(255,160,120,.8); }
+  .quality-control.quality-unknown { --quality-color:#a2b8c3; }
+  .quality-control ha-icon { --mdc-icon-size:35px; color:var(--quality-color); filter:drop-shadow(0 0 9px var(--quality-color)); }
+  .water-lines { display:flex; flex-direction:column; gap:3px; align-items:center; margin:0 0 2px; }
+  .water-lines span { display:block; width:30px; height:3px; border-radius:15px; background:var(--quality-color); opacity:.85; }
+  .water-lines span:nth-child(2) { width:21px; opacity:.62; }
+  .scene-footer { align-self:center; margin-top:auto; display:flex; gap:8px; justify-content:center; flex-wrap:wrap;
+    padding:7px 9px; border-radius:18px; background:rgba(2,27,40,.32); }
+  .accessory { display:flex; align-items:center; justify-content:center; position:relative; width:36px; height:36px;
+    background:rgba(5,34,44,.67); color:#cbf3ed; border:1px solid rgba(217,250,253,.27);
+    border-radius:50%; cursor:pointer; backdrop-filter:blur(9px); }
+  .accessory:hover { background:rgba(22,82,91,.92); }
+  .accessory ha-icon { --mdc-icon-size:20px; }
+  .accessory.off { color:#8eabb5; opacity:.77; }
+  .accessory.alert { color:#ffab80; border-color:#ffb28f; box-shadow:0 0 12px rgba(255,146,89,.34); }
+  .accessory.unavailable { color:#8b9aa6; opacity:.65; }
+  .accessory .activity-dot { position:absolute; top:0; right:0; width:6px; height:6px; border-radius:50%; background:#74e9bc; }
+  .accessory.off .activity-dot, .accessory.unavailable .activity-dot { background:#99adb9; }
+  .accessory.alert .activity-dot { background:#ff8766; }
+  .empty { align-self:center; max-width:300px; text-align:center; background:rgba(5,30,41,.8); border-radius:14px;
+    padding:15px 18px; line-height:1.5; font-size:12px; }
+  @keyframes caustics { from { transform:scale(1.12) translate(-1.5%,.5%); } to { transform:scale(1.25) translate(1%,1%); } }
+  @keyframes flake-fall { 0% { opacity:0; transform:translate3d(0,0,0) rotate(-20deg); }
+    10% { opacity:.95; } 75% { opacity:.8; } 100% { opacity:0; transform:translate3d(var(--flake-drift),240px,0) rotate(190deg); } }
+  @media (max-width:520px) {
+    .tank { min-height:368px; border-radius:20px; }
+    .scene-ui { padding:14px; min-height:368px; }
+    .title { font-size:22px; max-width:190px; }
+    .light-control { top:10px; left:59%; }
+    .feeder-control { top:33%; right:4%; }
+    .temperature-control { top:53%; left:3%; }
+    .quality-control { top:54%; right:3%; }
+    .alarms { max-width:49%; }
+    .alarm { padding:6px; font-size:10px; }
+    .scene-footer { gap:5px; padding:6px; }
   }
-  @media (prefers-reduced-motion: reduce) { button.metric { transition: none; } }
+  @media (prefers-reduced-motion:reduce) {
+    .caustics { animation:none; }
+    .flake { animation:none; opacity:.75; top:28%; }
+    .photo,.night-shade,.light-beam,.light-surface,.water-haze,.therm-level,.flake-field { transition:none; }
+    .scene-hotspot { transition:none; }
+  }
 `;
 
 function normalize(value) {
@@ -118,7 +195,7 @@ function entityDomain(id) {
   return String(id).split(".")[0];
 }
 function isAllowedState(id) {
-  return /^(sensor|binary_sensor|light|switch|fan|climate|number|datetime|button|select|input_boolean|input_number)\./.test(id);
+  return /^(sensor|binary_sensor|light|switch|fan|climate|number|datetime|button|select|input_boolean|input_number|input_datetime)\./.test(id);
 }
 function textFor(entry) {
   const state = entry.state;
@@ -146,7 +223,7 @@ function metricCandidates(entry) {
   else if (domain === "switch" && has(/light|beleucht|licht|wled|led|rgb/)) push("light", 69);
   const feeder = has(/feeder|fish.?feed|futterautomat|futterspender|\bfeeding\b|\bfuetter/);
   if (feeder) {
-    if (domain === "datetime" && has(/last.?feed|last.?fed|letzte/)) push("feeder", 145);
+    if (["datetime", "input_datetime"].includes(domain) && has(/last.?feed|last.?fed|letzte/)) push("feeder", 145);
     else if (domain === "sensor" && has(/next.?feed|remaining|status|state/)) push("feeder", 180);
     else if (["switch", "binary_sensor", "select"].includes(domain)) push("feeder", 165);
     else if (domain === "button" && has(/feed(?!.*restart)/)) push("feeder", 92);
@@ -219,7 +296,7 @@ function discoverAquariums(hass, config, labelNames) {
       }
       group.set("manual:" + index, {
         name: definition.name || area?.name || "Aquarium " + (index + 1),
-        image: definition.image || config.image, entities: subset, overrides: definition.entities || {},
+        image: definition.image || config.image, entities: subset, overrides: definition.entities || {}, definition,
       });
     });
   } else {
@@ -238,19 +315,19 @@ function discoverAquariums(hass, config, labelNames) {
       if (!group.has(key)) {
         group.set(key, {
           name: customLabel ? (labelNames.get(normalize(customLabel)) || customLabel) : area?.name || match,
-          image: config.image, entities: [], overrides: {},
+          image: config.image, entities: [], overrides: {}, definition: {},
         });
       }
       group.get(key).entities.push({ ...entry, priority: direct ? 65 : matchArea ? 20 : 5 });
     }
-    if (!group.size) group.set("empty", { name: match, image: config.image, entities: [], overrides: {} });
+    if (!group.size) group.set("empty", { name: match, image: config.image, entities: [], overrides: {}, definition: {} });
   }
-  return [...group.values()].map((tank) => {
+  return [...group.entries()].map(([key, tank]) => {
     const selections = {};
     for (const category of [...CATEGORY_ORDER, "leak"]) {
       selections[category] = scoreWinner(tank.entities, category, tank.overrides[category], hass);
     }
-    return { ...tank, selections };
+    return { ...tank, key, selections };
   });
 }
 function shortRelative(value, language) {
@@ -341,6 +418,119 @@ function presentation(category, entry, hass, warnings) {
   }
   return { label, icon: CATEGORY_INFO[category].icon, value, unit: "", detail, color, off, alert, available };
 }
+/** Colour extraction is limited to numeric light attributes, never HTML/CSS strings from entities. */
+function lightRgb(state) {
+  const attrs = state?.attributes || {};
+  const components = attrs.rgb_color;
+  if (Array.isArray(components) && components.length >= 3 && components.slice(0, 3).every((v) => Number.isFinite(Number(v)))) {
+    return components.slice(0, 3).map((v) => Math.max(0, Math.min(255, Math.round(Number(v)))));
+  }
+  if (Array.isArray(attrs.hs_color) && attrs.hs_color.length === 2 && attrs.hs_color.every((v) => Number.isFinite(Number(v)))) {
+    const h = (((Number(attrs.hs_color[0]) % 360) + 360) % 360) / 60;
+    const s = Math.max(0, Math.min(1, Number(attrs.hs_color[1]) / 100));
+    const chroma = s;
+    const secondary = chroma * (1 - Math.abs(h % 2 - 1));
+    const [r, g, b] = h < 1 ? [chroma, secondary, 0] : h < 2 ? [secondary, chroma, 0] : h < 3 ? [0, chroma, secondary]
+      : h < 4 ? [0, secondary, chroma] : h < 5 ? [secondary, 0, chroma] : [chroma, 0, secondary];
+    return [r, g, b].map((v) => Math.round(255 * (v + (1 - chroma))));
+  }
+  const kelvin = Number(attrs.color_temp_kelvin);
+  if (Number.isFinite(kelvin) && kelvin >= 1000 && kelvin <= 40000) {
+    const k = kelvin / 100;
+    const r = k <= 66 ? 255 : 329.698727446 * Math.pow(k - 60, -0.1332047592);
+    const g = k <= 66 ? 99.4708025861 * Math.log(k) - 161.1195681661
+      : 288.1221695283 * Math.pow(k - 60, -0.0755148492);
+    const b = k >= 66 ? 255 : k <= 19 ? 0 : 138.5177312231 * Math.log(k - 10) - 305.0447927307;
+    return [r, g, b].map((v) => Math.max(0, Math.min(255, Math.round(v))));
+  }
+  return [192, 219, 248];
+}
+function limitSetting(tank, config, key) {
+  const own = tank.definition?.[key];
+  const inherited = config?.[key];
+  const value = own === undefined || own === null || own === "" ? inherited : own;
+  return value === null || value === undefined || value === "" || !Number.isFinite(Number(value)) ? null : Number(value);
+}
+function temperatureCondition(entry, tank, config) {
+  if (!entry || !validState(entry.state)) return { level: "unknown", label: "Unavailable", height: 30 };
+  const state = entry.state;
+  const climateRaw = state.attributes?.current_temperature;
+  const raw = entityDomain(entry.id) === "climate"
+    ? (climateRaw === null || climateRaw === undefined || climateRaw === "" ? NaN : Number(climateRaw)) : floatState(state);
+  if (!Number.isFinite(raw)) return { level: "unknown", label: "Unavailable", height: 30 };
+  const min = limitSetting(tank, config, "temperature_min");
+  const max = limitSetting(tank, config, "temperature_max");
+  if (min === null || max === null || min >= max) return { level: "unknown", label: "Set range", height: 47 };
+  if (raw < min) return { level: "cold", label: "Too cold", height: 22 };
+  if (raw > max) return { level: "hot", label: "Too warm", height: 83 };
+  return { level: "ok", label: "In range", height: 52 };
+}
+function waterCondition(entry, warnings, tank, config) {
+  const highTds = warnings.some((item) => /high.?tds|tds.?high|ppm.?high/i.test(textFor(item)));
+  if (highTds) return { level: "bad", label: "High TDS", haze: .70 };
+  if (!entry || !validState(entry.state)) return { level: "unknown", label: "Unavailable", haze: 0 };
+  const n = floatState(entry.state);
+  const goodMax = limitSetting(tank, config, "tds_good_max");
+  const warnMax = limitSetting(tank, config, "tds_warn_max");
+  if (n === null || goodMax === null || warnMax === null || goodMax < 0 || warnMax <= goodMax) {
+    return { level: "unknown", label: "Set range", haze: 0 };
+  }
+  if (n <= goodMax) return { level: "good", label: "In range", haze: 0 };
+  if (n <= warnMax) return { level: "warning", label: "Check TDS", haze: .32 };
+  return { level: "bad", label: "High TDS", haze: .70 };
+}
+function feedingCondition(entries, selected, tank, config, now = Date.now()) {
+  const duration = limitSetting(tank, config, "feeding_duration");
+  const durationMs = Math.min(600, Math.max(5, duration ?? 90)) * 1000;
+  const candidates = selected && !entries.some((e) => e.id === selected.id) ? [...entries, selected] : entries;
+  let remainingMs = 0;
+  for (const entry of candidates) {
+    const text = textFor(entry);
+    const state = entry.state;
+    if (!validState(state)) continue;
+    const domain = entityDomain(entry.id);
+    const lastFeed = /last.?feed|last.?fed|letzte.?fütter|letzte.?futter/i.test(text);
+    const explicitlyFeeding = /feeding.?active|active.?feeding|dispens(?:ing|e)|f[uü]tterung.?aktiv/i.test(text);
+    if (lastFeed && ["datetime", "sensor", "input_datetime", "button"].includes(domain)) {
+      const haTimestamp = Number(state.attributes?.timestamp);
+      const timestamp = Number.isFinite(haTimestamp) && haTimestamp > 1000000000
+        ? haTimestamp * 1000 : Date.parse(state.state);
+      if (Number.isFinite(timestamp)) {
+        const left = durationMs - (now - timestamp);
+        if (left > 0 && left <= durationMs) remainingMs = Math.max(remainingMs, left);
+      }
+    }
+    if (explicitlyFeeding && ["binary_sensor", "switch", "input_boolean", "sensor"].includes(domain) &&
+        ["on", "feeding", "dispensing", "active", "running"].includes(normalize(state.state))) {
+      const timestamp = Date.parse(state.last_changed || "");
+      // Honour a live feeding signal, but never animate indefinitely after the last known activation.
+      if (Number.isFinite(timestamp)) {
+        const left = durationMs - (now - timestamp);
+        if (left > 0 && left <= durationMs) remainingMs = Math.max(remainingMs, left);
+      } else {
+        remainingMs = Math.max(remainingMs, durationMs);
+      }
+    }
+  }
+  return { active: remainingMs > 0, remainingMs };
+}
+function sceneState(tank, hass, config, now = Date.now()) {
+  const warnings = warningEntities(tank.entities);
+  const lighting = tank.selections.light?.state;
+  const lightActive = !!lighting && validState(lighting) && lighting.state === "on";
+  const lightKnown = !!lighting && validState(lighting);
+  const rgb = lightRgb(lighting);
+  const brightness = Number(lighting?.attributes?.brightness);
+  const strength = Number.isFinite(brightness) && brightness >= 0 && brightness <= 255 ? brightness / 255 : .80;
+  const temperature = temperatureCondition(tank.selections.temperature, tank, config);
+  const quality = waterCondition(tank.selections.tds, warnings, tank, config);
+  const feeding = feedingCondition(tank.entities, tank.selections.feeder, tank, config, now);
+  return { warnings, temperature, quality, feeding,
+    light: { active: lightActive, known: lightKnown, color: rgb, opacity: lightActive ? .38 + .53 * strength : 0,
+      darkness: lightKnown && !lightActive ? .64 : 0, photoBrightness: lightKnown ? (lightActive ? .95 + .25 * strength : .64) : 1 },
+  };
+}
+
 function make(tag, className, text) {
   const el = document.createElement(tag);
   if (className) el.className = className;
@@ -360,6 +550,8 @@ class HAAquariumCard extends HTMLElement {
     this._labelConnection = null;
     this._labelLoading = false;
     this._unsubscribeLabels = null;
+    this._feedingTimer = null;
+    this._nextFeedingRefresh = Infinity;
     this._stylesheet = make("style", null, STYLES);
     this._frame = make("ha-card");
     this._collection = make("div", "collection");
@@ -397,6 +589,7 @@ class HAAquariumCard extends HTMLElement {
     if (typeof this._unsubscribeLabels === "function") this._unsubscribeLabels();
     this._unsubscribeLabels = null;
     this._labelConnection = null;
+    if (this._feedingTimer !== null) { clearTimeout(this._feedingTimer); this._feedingTimer = null; }
   }
   async _subscribeLabels() {
     const connection = this._hass?.connection;
@@ -433,91 +626,175 @@ class HAAquariumCard extends HTMLElement {
       detail: { entityId }, bubbles: true, composed: true,
     }));
   }
-  _metricButton(category, entry, warnings, entries) {
-    const p = presentation(category, entry, this._hass, warnings);
-    if (category === "feeder" && entityDomain(entry.id) !== "datetime") {
-      const last = entries.find((candidate) => entityDomain(candidate.id) === "datetime" &&
-        /last.?feed|last.?fed/.test(textFor(candidate)) && validState(candidate.state));
-      const ago = last && shortRelative(last.state.state, this._hass.locale?.language || this._hass.language);
-      if (ago) p.detail = "Last fed " + ago;
-    }
-    const classes = ["metric", p.off ? "off" : "", p.alert ? "alert" : "", !p.available ? "unavailable" : ""].filter(Boolean).join(" ");
-    const button = make("button", classes);
+  _openButton(entry, name, condition, iconName, classes = "") {
+    const button = make("button", "scene-hotspot " + classes);
     button.type = "button";
-    button.style.setProperty("--reading-color", p.color);
-    button.title = (entry.state.attributes.friendly_name || entry.id) + " · Open entity";
-    button.setAttribute("aria-label", p.label + ": " + p.value + (p.unit ? " " + p.unit : "") + ". Open entity details");
-    const top = make("div", "metric-top");
-    const icon = make("ha-icon");
-    icon.setAttribute("icon", p.icon);
-    top.append(icon, make("span", "metric-label", p.label));
-    if (category === "light" && p.available && !p.off) {
-      const dot = make("span", "swatch");
-      dot.style.background = p.color;
-      top.append(dot);
-    }
-    const row = make("div", "metric-value");
-    row.append(make("span", "value-text", p.value));
-    if (p.unit) row.append(make("span", "unit", p.unit));
-    button.append(top, row);
-    if (p.detail) button.append(make("div", "metric-detail", p.detail));
+    button.title = name + ": " + condition + ". Open entity details";
+    button.setAttribute("aria-label", name + ": " + condition + ". Open entity details");
     button.addEventListener("click", () => this._moreInfo(entry.id));
+    if (iconName) {
+      const icon = make("ha-icon");
+      icon.setAttribute("icon", iconName);
+      button.append(icon);
+    }
     return button;
   }
   _tankElement(tank) {
     for (const entry of tank.entities) this._renderedIds.add(entry.id);
+    for (const entry of Object.values(tank.selections)) if (entry) this._renderedIds.add(entry.id);
+    const scene = sceneState(tank, this._hass, this._config);
+    if (scene.feeding.active && Number.isFinite(scene.feeding.remainingMs)) {
+      this._nextFeedingRefresh = Math.min(this._nextFeedingRefresh, scene.feeding.remainingMs);
+    }
     const section = make("section", "tank");
-    const photo = make("div", "tank-photo");
-    const image = safeImage(tank.image);
-    photo.style.backgroundImage = "url(" + JSON.stringify(image) + ")";
-    section.append(photo);
-    const main = make("div", "contents");
-    const header = make("div", "head");
-    const identity = make("div", "identity");
-    identity.append(make("div", "eyebrow", "AQUATIC OVERVIEW"), make("h2", "title", tank.name));
-    header.append(identity);
-    const status = make("div", "status-line");
-    const warnings = warningEntities(tank.entities);
-    for (const warning of warnings.slice(0, 2)) {
-      const alert = make("button", "status-pill warning");
+    section.dataset.key = tank.key;
+    section.classList.add("quality-" + scene.quality.level);
+    if (scene.feeding.active) section.classList.add("feeding");
+    if (scene.light.known) section.classList.add(scene.light.active ? "light-on" : "light-off");
+    section.style.setProperty("--light-rgb", scene.light.color.join(","));
+    section.style.setProperty("--beam-opacity", scene.light.opacity.toFixed(3));
+    section.style.setProperty("--photo-brightness", String(scene.light.photoBrightness));
+    section.style.setProperty("--night-opacity", String(scene.light.darkness));
+    section.style.setProperty("--haze-opacity", String(scene.quality.haze));
+    const photo = make("div", "photo");
+    photo.style.backgroundImage = "url(" + JSON.stringify(safeImage(tank.image)) + ")";
+    section.append(photo, make("div", "water-haze"), make("div", "night-shade"),
+      make("div", "light-beam"), make("div", "light-surface"), make("div", "caustics"), make("div", "scene-vignette"));
+    const flakes = make("div", "flake-field");
+    flakes.setAttribute("aria-hidden", "true");
+    if (scene.feeding.active) {
+      for (let i = 0; i < 13; i++) {
+        const flake = make("span", "flake");
+        flake.style.setProperty("--flake-left", (62 + (i * 17 % 23)) + "%");
+        flake.style.setProperty("--flake-size", (3 + i % 4) + "px");
+        flake.style.setProperty("--flake-duration", (4.3 + i % 5 * .54) + "s");
+        flake.style.setProperty("--flake-delay", (-i * .57) + "s");
+        flake.style.setProperty("--flake-drift", (-30 + i * 13 % 55) + "px");
+        flakes.append(flake);
+      }
+    }
+    section.append(flakes);
+    const ui = make("div", "scene-ui");
+    const head = make("div", "head");
+    const heading = make("div", "heading");
+    heading.append(make("div", "eyebrow", "Aquarium"), make("h2", "title", tank.name));
+    const connection = make("div", "connectivity" + (this._hass.connected === false ? " offline" : ""));
+    connection.append(make("span", "connectivity-dot"), make("span", null, this._hass.connected === false ? "Offline" : tank.entities.length ? "Live conditions" : "No devices found"));
+    heading.append(connection);
+    head.append(heading);
+    const alarms = make("div", "alarms");
+    for (const warning of scene.warnings.slice(0, 2)) {
+      const alert = make("button", "alarm");
       alert.type = "button";
       const icon = make("ha-icon");
       icon.setAttribute("icon", "mdi:alert-circle-outline");
-      alert.append(icon, make("span", null, warning.state.attributes.friendly_name || "Aquarium alert"));
-      alert.title = "View " + warning.id;
+      alert.append(icon, make("span", null, warning.state?.attributes?.friendly_name || "Aquarium alert"));
       alert.addEventListener("click", () => this._moreInfo(warning.id));
-      status.append(alert);
+      alert.title = "View " + warning.id;
+      alarms.append(alert);
     }
-    const live = make("span", "status-pill" + (this._hass.connected === false ? " offline" : ""));
-    live.append(make("span", "dot"), make("span", null, this._hass.connected === false ? "Offline" : tank.entities.length ? "Live" : "No data"));
-    status.append(live);
-    header.append(status);
-    main.append(header);
-    const readings = make("div", "readings");
+    head.append(alarms);
+    ui.append(head);
     const requestedMax = Number(this._config.max_metrics);
     const maximum = Number.isFinite(requestedMax) ? Math.min(8, Math.max(2, Math.round(requestedMax))) : 5;
-    let shown = 0;
-    for (const key of CATEGORY_ORDER) {
-      const entry = tank.selections[key];
-      if (!entry || shown >= maximum) continue;
-      readings.append(this._metricButton(key, entry, warnings, tank.entities));
-      this._renderedIds.add(entry.id);
-      shown += 1;
+    const primary = ["light", "temperature", "tds", "feeder"].filter((category) => !!tank.selections[category]).slice(0, maximum);
+    const extras = ["water_level", "pump", "heater", "ph", "salinity"].filter((category) => !!tank.selections[category])
+      .slice(0, Math.max(0, maximum - primary.length));
+    for (const category of primary) {
+      const entry = tank.selections[category];
+      const p = presentation(category, entry, this._hass, scene.warnings);
+      if (category === "light") {
+        const label = scene.light.active ? (p.detail ? "On · " + p.detail : "On") : scene.light.known ? "Off" : "Unavailable";
+        const lamp = this._openButton(entry, "Lighting", label, "mdi:ceiling-light", "light-control" + (scene.light.active ? "" : " is-off"));
+        lamp.style.setProperty("--lamp-color", scene.light.active ? "rgb(" + scene.light.color.join(",") + ")" : "#b0c9d5");
+        lamp.append(make("span", "spot-label", "Light"));
+        ui.append(lamp);
+      } else if (category === "temperature") {
+        const level = scene.temperature;
+        const thermometer = this._openButton(entry, "Temperature", level.label, null, "temperature-control temp-" + level.level);
+        thermometer.style.setProperty("--therm-height", level.height + "%");
+        const graphic = make("span", "thermometer");
+        const stem = make("span", "therm-stem");
+        stem.append(make("span", "therm-level"));
+        graphic.append(stem, make("span", "therm-bulb"));
+        thermometer.append(graphic, make("span", "spot-label", "Temp"), make("span", "spot-condition", level.label));
+        ui.append(thermometer);
+      } else if (category === "tds") {
+        const level = scene.quality;
+        const quality = this._openButton(entry, "TDS", level.label, "mdi:water", "quality-control quality-" + level.level);
+        const lines = make("span", "water-lines");
+        lines.append(make("span"), make("span"));
+        quality.append(lines, make("span", "spot-label", "Water"), make("span", "spot-condition", level.label));
+        ui.append(quality);
+      } else if (category === "feeder") {
+        const label = scene.feeding.active ? "Feeding" : p.available ? "Ready" : "Unavailable";
+        const feeder = this._openButton(entry, "Feeder", label, "mdi:food-variant", "feeder-control" + (scene.feeding.active ? " is-feeding" : ""));
+        feeder.append(make("span", "spot-label", "Feeder"), make("span", "spot-condition", label));
+        ui.append(feeder);
+      }
     }
-    if (!shown) readings.append(make("div", "empty", tank.entities.length ?
-      "No supported aquarium overview sensors were found. Map entities in the card configuration." :
-      "No aquarium entities found. Assign the Aquarium label or choose an aquarium area in the card editor."));
-    main.append(readings);
-    section.append(main);
+    if (extras.length) {
+      const footer = make("div", "scene-footer");
+      for (const category of extras) {
+        const entry = tank.selections[category];
+        const p = presentation(category, entry, this._hass, scene.warnings);
+        const badge = make("button", ["accessory", p.off ? "off" : "", p.alert ? "alert" : "", !p.available ? "unavailable" : ""].filter(Boolean).join(" "));
+        badge.type = "button";
+        badge.title = p.label + ". Open entity details";
+        badge.setAttribute("aria-label", p.label + ". Open entity details");
+        const icon = make("ha-icon");
+        icon.setAttribute("icon", p.icon);
+        badge.append(icon);
+        if (["pump", "heater"].includes(category)) badge.append(make("span", "activity-dot"));
+        badge.addEventListener("click", () => this._moreInfo(entry.id));
+        footer.append(badge);
+      }
+      ui.append(footer);
+    }
+    if (!primary.length && !extras.length) {
+      ui.append(make("div", "empty", tank.entities.length ?
+        "No supported aquarium sensors found. Map entities in the card configuration." :
+        "Assign the aquarium area or label, or choose entities in the card editor."));
+    }
+    section.append(ui);
     return section;
   }
   _render() {
     if (!this._hass || !this._collection) return;
+    if (this._feedingTimer !== null) { clearTimeout(this._feedingTimer); this._feedingTimer = null; }
+    this._nextFeedingRefresh = Infinity;
     const aquariums = this._discover();
     this._tankCount = aquariums.length;
     this._renderedIds = new Set();
-    this._collection.replaceChildren(...aquariums.map((tank) => this._tankElement(tank)));
+    const existing = new Map([...this._collection.querySelectorAll("section.tank")]
+      .map((section) => [section.dataset.key, section]));
+    const nodes = aquariums.map((tank) => {
+      const next = this._tankElement(tank);
+      const previous = existing.get(tank.key);
+      if (!previous) return next;
+      previous.className = next.className;
+      for (const property of ["--light-rgb", "--beam-opacity", "--photo-brightness", "--night-opacity", "--haze-opacity"]) {
+        previous.style.setProperty(property, next.style.getPropertyValue(property));
+      }
+      previous.querySelector(".photo").style.backgroundImage = next.querySelector(".photo").style.backgroundImage;
+      if (previous.classList.contains("feeding") !== !!previous.querySelector(".flake-field .flake")) {
+        previous.querySelector(".flake-field").replaceWith(next.querySelector(".flake-field"));
+      }
+      previous.querySelector(".scene-ui").replaceWith(next.querySelector(".scene-ui"));
+      return previous;
+    });
+    const currentNodes = [...this._collection.children];
+    if (nodes.length !== currentNodes.length || nodes.some((node, i) => node !== currentNodes[i])) {
+      this._collection.replaceChildren(...nodes);
+    }
+    if (Number.isFinite(this._nextFeedingRefresh) && this.isConnected) {
+      this._feedingTimer = setTimeout(() => {
+        this._feedingTimer = null;
+        this._render();
+      }, Math.max(50, Math.ceil(this._nextFeedingRefresh) + 30));
+    }
   }
+
 }
 
 class HAAquariumCardEditor extends HTMLElement {
@@ -540,6 +817,11 @@ class HAAquariumCardEditor extends HTMLElement {
       button { appearance: none; border: 1px solid var(--divider-color, #9aa); padding: 9px 13px; border-radius: 10px;
         background: var(--secondary-background-color, #f4f5f5); color: var(--primary-text-color); font-weight: 650; cursor: pointer; }
       .remove { color: var(--error-color, #c44); }
+      details { border:1px solid var(--divider-color,#9aa); border-radius:12px; padding:11px; }
+      summary { font-weight:670; cursor:pointer; }
+      .settings { margin-top:10px; display:grid; gap:9px; }
+      .range-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(130px,1fr)); gap:10px; }
+      .subhint { margin-top:8px; color:var(--secondary-text-color); font-size:11px; line-height:1.4; }
     </style><div class="editor"></div>`;
     this._editor = this.shadowRoot.querySelector(".editor");
   }
@@ -595,6 +877,25 @@ class HAAquariumCardEditor extends HTMLElement {
       this._emit();
     }, Array.from({ length: 7 }, (_, i) => [String(i + 2), String(i + 2)]));
     this._editor.append(two);
+    const conditionSettings = make("details");
+    const summary = make("summary", null, "Water condition ranges & feeding animation");
+    conditionSettings.append(summary);
+    const conditionFields = make("div", "settings");
+    const conditions = make("div", "range-grid");
+    for (const [key, caption] of [
+      ["temperature_min", "Minimum water temperature"], ["temperature_max", "Maximum water temperature"],
+      ["tds_good_max", "TDS good up to (ppm)"], ["tds_warn_max", "TDS warning up to (ppm)"],
+      ["feeding_duration", "Show flakes for (seconds)"],
+    ]) {
+      this._field(conditions, caption, this._config[key] ?? "", (value) => {
+        this._config[key] = value.trim();
+        this._emit();
+      });
+    }
+    conditionFields.append(conditions, make("div", "subhint",
+      "Set the temperature range in the same unit as your HA temperature sensor (°C or °F). TDS thresholds depend on your aquarium's inhabitants. Leaving thresholds blank makes the cue neutral, never falsely healthy. A high-TDS alarm remains authoritative."));
+    conditionSettings.append(conditionFields);
+    this._editor.append(conditionSettings);
     this._field(this._editor, "Default background image URL (optional)", this._config.image || "", (value) => {
       this._config.image = value.trim();
       this._emit();
@@ -623,6 +924,23 @@ class HAAquariumCardEditor extends HTMLElement {
       this._field(block, "Area", tank.area || "", (value) => { tank.area = value; this._emit(); }, areaOptions);
       this._field(block, "Aquarium label name or ID (optional)", tank.label || "", (value) => { tank.label = value; this._emit(); });
       this._field(block, "Background image URL", tank.image || "", (value) => { tank.image = value; this._emit(); });
+      const tankThresholds = make("details");
+      tankThresholds.append(make("summary", null, "Optional per-aquarium ranges"));
+      const group = make("div", "settings");
+      const localRanges = make("div", "range-grid");
+      for (const [key, caption] of [
+        ["temperature_min", "Minimum temperature"], ["temperature_max", "Maximum temperature"],
+        ["tds_good_max", "TDS good max (ppm)"], ["tds_warn_max", "TDS warning max (ppm)"],
+        ["feeding_duration", "Flakes duration (seconds)"],
+      ]) {
+        this._field(localRanges, caption, tank[key] ?? "", (value) => {
+          tank[key] = value.trim();
+          this._emit();
+        });
+      }
+      group.append(localRanges, make("div", "subhint", "Blank values inherit the global range above."));
+      tankThresholds.append(group);
+      block.append(tankThresholds);
       this._editor.append(block);
     });
     const add = make("button", null, "+ Add aquarium");
@@ -640,7 +958,7 @@ window.customCards = window.customCards || [];
 if (!window.customCards.some((item) => item.type === "ha-aquarium-card")) {
   window.customCards.push({
     type: "ha-aquarium-card", name: "Aquarium Card",
-    description: "Photo-first, auto-discovered aquarium overview for one or multiple tanks",
+    description: "A living aquarium scene with visual temperature, lighting, feeding and water conditions",
     documentationURL: "https://github.com/Chreece/Ha-Aquarium-Card",
     preview: true,
   });
@@ -648,4 +966,4 @@ if (!window.customCards.some((item) => item.type === "ha-aquarium-card")) {
 console.info("%c HA Aquarium Card " + AQUARIUM_CARD_VERSION + " ", "color:#0d3448;background:#8de3e8;font-weight:bold");
 
 // Pure helpers are exported for offline tests. This does not add a runtime dependency.
-export { discoverAquariums, metricCandidates, presentation, warningEntities, safeImage, validState };
+export { discoverAquariums, metricCandidates, presentation, warningEntities, safeImage, validState, lightRgb, temperatureCondition, waterCondition, feedingCondition, sceneState };
