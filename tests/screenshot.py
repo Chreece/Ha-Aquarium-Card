@@ -2,6 +2,8 @@
 from pathlib import Path
 import re
 import base64
+import os
+import shutil
 from playwright.sync_api import sync_playwright
 
 root = Path(__file__).resolve().parent.parent
@@ -14,7 +16,11 @@ js = js.replace('new URL("./aquarium-default.webp", import.meta.url).href', '"da
 js = js[:js.index('// Pure helpers are exported for offline tests.')]
 
 with sync_playwright() as p:
-    browser = p.chromium.launch(headless=True, executable_path='/usr/bin/chromium', args=['--no-sandbox'])
+    executable = os.environ.get('AQUARIUM_CHROMIUM') or shutil.which('chromium') or shutil.which('chromium-browser')
+    launch = {'headless': True, 'args': ['--no-sandbox']}
+    if executable:
+        launch['executable_path'] = executable
+    browser = p.chromium.launch(**launch)
     page = browser.new_page(viewport={'width': 930, 'height': 1060}, device_scale_factor=1)
     issues = []
     page.on('pageerror', lambda exc: issues.append(str(exc)))
@@ -31,6 +37,12 @@ with sync_playwright() as p:
     page.locator('ha-aquarium-card').evaluate('(e)=>e.shadowRoot.querySelector("button.temperature-control").click()')
     print('More info opened:', page.evaluate('window.lastOpened'))
     assert page.evaluate('window.lastOpened') == 'sensor.main_temperature'
+    assert page.locator('ha-aquarium-card').evaluate('''e => [...e.shadowRoot.querySelectorAll('section.tank')]
+      .every(t => !/\\b(?:198|325|24\\.7|26\\.1)\\b/.test(t.querySelector('.scene-ui').textContent))''')
+    assert page.locator('ha-aquarium-card').evaluate(
+      'e => !!e.shadowRoot.querySelector(".tank.feeding .flake")')
+    assert page.locator('ha-aquarium-card').evaluate(
+      'e => e.shadowRoot.querySelector(".tank.light-on").style.getPropertyValue("--beam-opacity") !== "0.000"')
     print('Alerts after clearing alarm:', page.evaluate('''() => {
       const card = document.querySelector('#card');
       const old = window.mockHass;
@@ -59,5 +71,7 @@ with sync_playwright() as p:
     mobile.wait_for_function('window.previewReady === true')
     mobile.wait_for_timeout(200)
     mobile.locator('ha-aquarium-card').screenshot(path=str(root / 'docs' / 'mobile.png'))
-    print('Mobile overflow:', mobile.evaluate('({doc:document.documentElement.scrollWidth,viewport:window.innerWidth,card:document.querySelector("#card").getBoundingClientRect().width})'))
+    overflow = mobile.evaluate('({doc:document.documentElement.scrollWidth,viewport:window.innerWidth,card:document.querySelector("#card").getBoundingClientRect().width})')
+    print('Mobile overflow:', overflow)
+    assert overflow['doc'] <= overflow['viewport']
     browser.close()
