@@ -11,7 +11,7 @@
 </style></head><body><div class="shell"><div class="page-head"><h1>My aquariums</h1><span>Home Assistant · dashboard</span></div><ha-aquarium-card id="card"></ha-aquarium-card></div>
 <script>
   customElements.define('ha-icon', class extends HTMLElement {
-    connectedCallback() { const name=this.getAttribute('icon')||''; this.textContent = ({'mdi:thermometer-water':'🌡','mdi:water-check':'≈','mdi:lightbulb-on-outline':'☀','mdi:fish':'🐠','mdi:waves-arrow-up':'≋','mdi:test-tube':'⚗','mdi:water-percent':'💧','mdi:pump':'↻','mdi:radiator':'♨','mdi:alert-circle-outline':'⚠'})[name]||'•'; }
+    connectedCallback() { const name=this.getAttribute('icon')||''; this.textContent = ({'mdi:thermometer-water':'🌡','mdi:water-check':'≈','mdi:lightbulb-on-outline':'☀','mdi:fish':'🐠','mdi:waves-arrow-up':'≋','mdi:test-tube':'⚗','mdi:water-percent':'💧','mdi:pump':'↻','mdi:radiator':'♨','mdi:alert-circle-outline':'⚠','mdi:water':'💧','mdi:ceiling-light':'☀','mdi:food-variant':'🍃'})[name]||'•'; }
   });
   function state(id, status, attrs){return {entity_id:id,state:status,attributes:attrs||{}};}
   window.mockHass = {
@@ -33,7 +33,7 @@
       'sensor.main_temperature':state('sensor.main_temperature','24.7',{friendly_name:'Aquarium Water Temperature',device_class:'temperature',unit_of_measurement:'°C'}),
       'sensor.main_tds':state('sensor.main_tds','198',{friendly_name:'Aquarium TDS',unit_of_measurement:'ppm'}),
       'light.main_wled':state('light.main_wled','on',{friendly_name:'Aquarium WLED',rgb_color:[35,177,255],effect:'Deep ocean'}),
-      'datetime.main_feed':state('datetime.main_feed',new Date(Date.now()-2*3600*1000).toISOString(),{friendly_name:'Aquarium Fishfeeder Last Feed'}),
+      'datetime.main_feed':state('datetime.main_feed',new Date(Date.now()-25*1000).toISOString(),{friendly_name:'Aquarium Fishfeeder Last Feed'}),
       'binary_sensor.main_water_level':state('binary_sensor.main_water_level','off',{friendly_name:'Aquarium Water Level',device_class:'problem'}),
       'sensor.nano_temperature':state('sensor.nano_temperature','26.1',{friendly_name:'Nano aquarium temperature',device_class:'temperature',unit_of_measurement:'°C'}),
       'sensor.nano_tds':state('sensor.nano_tds','325',{friendly_name:'Nano aquarium TDS',unit_of_measurement:'ppm'}),
@@ -49,7 +49,7 @@
 <script type="module">
   import '../dist/ha-aquarium-card.js';
   const card=document.querySelector('#card');
-  card.setConfig({match:'Aquarium', max_metrics:5});
+  card.setConfig({match:'Aquarium', max_metrics:5, temperature_min:23, temperature_max:26, tds_good_max:220, tds_warn_max:320, feeding_duration:75});
   card.hass=window.mockHass;
   window.previewReady=true;
   card.addEventListener('hass-more-info',e=>{window.lastOpened=e.detail.entityId});
