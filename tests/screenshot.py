@@ -26,9 +26,9 @@ with sync_playwright() as p:
     page.wait_for_timeout(200)
     print('Page errors:', issues)
     print('Card tanks:', page.locator('ha-aquarium-card').evaluate('(e)=>e.shadowRoot.querySelectorAll("section.tank").length'))
-    print('Metrics:', page.locator('ha-aquarium-card').evaluate('(e)=>[...e.shadowRoot.querySelectorAll("button.metric")].map(x=>x.innerText)'))
+    print('Metrics:', page.locator('ha-aquarium-card').evaluate('(e)=>[...e.shadowRoot.querySelectorAll("button.scene-hotspot")].map(x=>x.innerText)'))
     page.locator('ha-aquarium-card').screenshot(path=str(root / 'docs' / 'preview.png'))
-    page.locator('ha-aquarium-card').evaluate('(e)=>e.shadowRoot.querySelector("button.metric").click()')
+    page.locator('ha-aquarium-card').evaluate('(e)=>e.shadowRoot.querySelector("button.scene-hotspot").click()')
     print('More info opened:', page.evaluate('window.lastOpened'))
     assert page.evaluate('window.lastOpened') == 'sensor.main_temperature'
     print('Alerts after clearing alarm:', page.evaluate('''() => {
@@ -36,7 +36,7 @@ with sync_playwright() as p:
       const old = window.mockHass;
       const entity = 'binary_sensor.nano_high_tds';
       card.hass = { ...old, states: { ...old.states, [entity]: { ...old.states[entity], state: 'off' } } };
-      return card.shadowRoot.querySelectorAll('button.warning').length;
+      return card.shadowRoot.querySelectorAll('button.alarm').length;
     }'''))
     print('Editor add-tank result:', page.evaluate('''() => {
       const editor = document.createElement('ha-aquarium-card-editor');
